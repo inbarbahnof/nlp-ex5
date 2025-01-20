@@ -2,11 +2,17 @@ import wikipedia, spacy
 from typing import List, Set, Tuple, Dict
 from collections import defaultdict
 import numpy as np 
+import google.generativeai as genai
+import json 
+import os
+
 
 PROPN = "PROPN"
 VERB = "VERB"
 ADP = "ADP"
 
+# Set your Palm API key
+PALM_API_KEY = "AIzaSyAiFTOCes5aHyoBxuR6mNSpcuRw6oM2M0c"
 
 
 # ----------- Section 1 UTILS ------------
@@ -54,8 +60,6 @@ def get_subject_relation_object_by_pos(doc):
     return relation
 
 # ----------- END of Section 1 UTILS ------------
-
-
 
 def find_proper_noun_heads(doc):
     """
@@ -111,7 +115,6 @@ def meets_condition_2(head1: spacy.tokens.Token, head2: spacy.tokens.Token) -> b
         return {head1.head,head2.head}
     return None
 
-
 def get_subject_relation_object_by_dep_tree(doc):
     relations = []
     prop_noun_head = find_proper_noun_heads(doc)
@@ -127,6 +130,46 @@ def get_subject_relation_object_by_dep_tree(doc):
             relations.append((head1_set,relation_by_2,head2_set))
     return relations
 
+# ---------- Extractor using LLM -------------
+def create_prompt(persona, text):
+    prompt = f"""
+    Given the following text about {persona}, extract subject-relation-object triplets.
+
+    Text:
+    {text}
+
+    Output the triplets in JSON format, where each triplet is a dictionary with keys "subject", "relation", and "object". If no triplets are found, return an empty JSON array.
+
+    Example:
+    Text: Barack Obama was the 44th president of the United States. Michelle Obama is his wife.
+    Output:
+    [
+        {{"subject": "Barack Obama", "relation": "was the 44th president of", "object": "United States"}},
+        {{"subject": "Michelle Obama", "relation": "is wife of", "object": "Barack Obama"}}
+    ]
+    """
+    return prompt
+    
+def extract_using_llm(page_dict):
+    for persona in page_dict:
+        print(F"-----{persona}------------")
+        text = page_dict[persona]
+        prompt = create_prompt(persona,text)
+
+        genai.configure(api_key=PALM_API_KEY)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        json_data = response.text
+
+        # Specify the path to the file where you want to save the JSON data
+        file_path = f'{persona}.json'
+        # Write the JSON string to the file
+        with open(file_path, 'w') as file:
+            file.write(json_data)
+        
+
+
+
 if __name__ == "__main__":
 
     page_dict = {}
@@ -138,9 +181,9 @@ if __name__ == "__main__":
         search_result = wikipedia.search(persona)
         page_dict[persona]["wikipedia_page"] = wikipedia.page(search_result[0],auto_suggest=False).content
         page_dict[persona]["nlp_doc"] = nlp(page_dict[persona]["wikipedia_page"])
-        page_dict[persona]["relation_by_pos"] = ex5.get_subject_relation_object_by_pos(page_dict[persona]["nlp_doc"])
+        page_dict[persona]["relation_by_pos"] = get_subject_relation_object_by_pos(page_dict[persona]["nlp_doc"])
         print(f"Number of Triplets by Pos - {len(page_dict[persona]['relation_by_pos'])}")
-        page_dict[persona]["relation_by_tree"] = ex5.get_subject_relation_object_by_dep_tree(page_dict[persona]["nlp_doc"])
+        page_dict[persona]["relation_by_tree"] = get_subject_relation_object_by_dep_tree(page_dict[persona]["nlp_doc"])
         print(f"Number of Triplets by Tree - {len(page_dict[persona]['relation_by_tree'])}")
     
     samples_pos = []
@@ -153,3 +196,5 @@ if __name__ == "__main__":
         random_idx = np.random.randint(1, len(page_dict[persona]["relation_by_tree"]),5)
         for i in random_idx:
             samples_tree.append(page_dict[persona]["relation_by_tree"][i])
+    
+    extract_using_llm(page_dict)
