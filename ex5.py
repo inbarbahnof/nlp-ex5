@@ -12,7 +12,7 @@ VERB = "VERB"
 ADP = "ADP"
 
 # Set your Palm API key
-PALM_API_KEY = "AIzaSyAiFTOCes5aHyoBxuR6mNSpcuRw6oM2M0c"
+PALM_API_KEY = ""
 
 
 # ----------- Section 1 UTILS ------------
